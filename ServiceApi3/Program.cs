@@ -88,6 +88,22 @@ masterApi.MapGet("/for", [Authorize] (HttpContext context, [FromQuery] uint mast
     return res.User.Id == userId ? Results.Ok() : Results.NotFound();
 });
 
+masterApi.MapGet("/set_location", 
+    (HttpContext context, [FromQuery] string token, [FromQuery] string hardware_name, [FromQuery] string guid, [FromQuery] double latitude, [FromQuery] double longitude) =>
+{
+    var user = new UserContext();
+    var master = user.GetMasterByToken(token);
+    if (master == null)
+    {
+        return Results.NotFound();
+    }
+
+    var slave = user.GetOrCreateSlaveByMasterAndGuid(master.Id, guid, hardware_name);
+    slave.Latitude = latitude;
+    slave.Longitude = longitude;
+    user.SaveChanges();
+    return Results.Ok();
+});
 
 masterApi.MapPost("/push", (HttpContext context, [FromQuery] string token, [FromBody] PushData[] registerData) =>
 {
@@ -108,7 +124,7 @@ masterApi.MapPost("/push", (HttpContext context, [FromQuery] string token, [From
             {
                 foreach (var z in r.sensor_data)
                 {
-                    user.PushData(slave, r.sensor_name + "_" + z.sensor_name, r.status, z.sensor_value);
+                    user.PushData(slave, r.sensor_name + "_" + z.sensor_name, r.status, z.sensor_value, z.units);
                 }
             }
         }
@@ -223,7 +239,7 @@ masterApi.MapGet("/sensors", [Authorize] (HttpContext context, [FromQuery] uint 
     }
     var user = new UserContext();
     var res = user.GetSlavesByUserAndMaster(userId, master_id)
-        .Select(x=> new SlaveLine(x.Id, x.ToString()));
+        .Select(x=> new SlaveLine(x.Id, x.ToString(), x.Longitude, x.Latitude));
     return Results.Ok(res);
 });
 
@@ -240,6 +256,30 @@ masterApi.MapGet("/data/names", [Authorize]
     return Results.Ok(res);
 });
 
+masterApi.MapGet("/last_timestamp", [Authorize] (HttpContext context, [FromQuery] uint master_id) =>
+{
+    var userId = Auth.GetUserIdByContext(context);
+    if (userId == 0)
+    {
+        return Results.Unauthorized();
+    }
+    var user = new UserContext();
+    var m = user.GetMasterById(master_id);
+    try
+    {
+        if (m.User.Id != userId)
+        {
+            throw new Exception("Invalid master");
+        }
+        var res = user.GetLastTimestampByUser(master_id);
+        return Results.Ok(res);
+    }
+    catch
+    {
+        return Results.BadRequest();
+    }
+});
+
 masterApi.MapGet("/data", [Authorize] 
     (HttpContext context, [FromQuery] long from, [FromQuery] long to,
     [FromQuery] uint master_id, [FromQuery] uint sensor_id, [FromQuery] string name) =>
@@ -251,7 +291,7 @@ masterApi.MapGet("/data", [Authorize]
     }
     var user = new UserContext();
     var res = user.GetData(from, to, master_id, sensor_id, userId, name)
-    .Select(x => new SensorLine(x.Id, x.Timestamp, x.Value, x.Status, x.Name));
+    .Select(x => new SensorLine(x.Id, x.Timestamp, x.Value, x.Status, x.Name, x.Units));
     return Results.Ok(res);
 });
 

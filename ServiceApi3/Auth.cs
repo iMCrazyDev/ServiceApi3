@@ -159,11 +159,11 @@ namespace ServiceApi3
                 return (false, "Error");
             }
 
-            public void PushData(Slave slave, string name, int status, double value)
+            public void PushData(Slave slave, string name, int status, double value, string units)
             {
                 try
                 {
-                    SensorDatas.Add(new SensorData() { Slave = slave, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Value = value, Name = name, Status = status});
+                    SensorDatas.Add(new SensorData() { Slave = slave, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Value = value, Name = name, Status = status, Units = units});
                     SaveChanges();
                 }
                 catch { }
@@ -203,6 +203,11 @@ namespace ServiceApi3
                     master.Name = new_name;
                     SaveChanges();
                 }
+            }
+            
+            public double GetLastTimestampByUser(long master_id)
+            {
+                return SensorDatas.Where(x => x.Slave.Master.Id == master_id).Max(x => x.Timestamp);
             }
 
             public List<Slave> GetSlavesByUserAndMaster(uint userId, uint masterId)
@@ -287,6 +292,8 @@ namespace ServiceApi3
         public string? Guid { get; set; }
         public string? Name { get; set; }
         public string? HardwareName { get; set; }
+        public double? Longitude { get; set; }
+        public double? Latitude { get; set; }
 
         public override string ToString()
         {
@@ -314,18 +321,19 @@ namespace ServiceApi3
         public string? Name { get; set; }
         public int Status { get; set; }
         public Slave? Slave { get; set; }
+        public string? Units { get; set; }
     }
     public record LoginData (string email, string password);
     public record LoginResult (bool result, string details);
     public record RegisterData(string email, string password, string name);
     public record RegisterResult(bool result, string details);
     public record MasterLine(uint id, string name);
-    public record SlaveLine(uint id, string name);
-    public record SensorLine(uint id, long timestamp, double value, int status, string? name);
+    public record SlaveLine(uint id, string name, double? longitude, double? latitude);
+    public record SensorLine(uint id, long timestamp, double value, int status, string? name, string? units);
     public record GetMasterLine(bool status,string? token);
     public record PushData(string guid, string hardware_name, SlaveData[] values);
     public record SlaveData(string sensor_name, int status, SensorOutput[] sensor_data);
-    public record SensorOutput(string sensor_name, double sensor_value);
+    public record SensorOutput(string sensor_name, double sensor_value, string units);
     [JsonSerializable(typeof(PushData))]
     [JsonSerializable(typeof(SlaveData))]
     [JsonSerializable(typeof(SlaveData[]))]
